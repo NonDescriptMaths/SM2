@@ -1,0 +1,147 @@
+---
+title: "Statistical Methods 2: Porfolio 1"
+author: "Kieran Morris"
+output: 
+  pdf_document:
+    number_sections: true
+
+---
+# Factor Analysis on mtcars dataset
+We import the `mtcars` dataset, which has 32 observations on 11 variables. We will attempt to perform factor analysis on it - ideally matching up with results from PCA as presented in the lecture notes.
+
+```{r}
+data(mtcars)
+data <- mtcars
+print(data)
+print(dim(data))
+```
+
+## Choosing the number of factors
+Since we have 11 variables we can write out $$\triangle_{p,k} = (11-k)^2/2 - (11+k)/2, $$ which we see is negative when $k <6$, so our possible values for the loading sizes are $\{1,2,3,4,5,6\}$.
+
+To strike a balance  between accuracy and interpatibility we will use $k=4$ as our number of factors.
+
+## Finding the loading matrix
+We then perform the factor analysis on the `mtcars` dataset with the function `factanal`, specifying our number of factors as 4 and use `"varimax"` to rotate the factors to a simpler form. 
+```{r}
+FA <- factanal(mtcars, factors = 4, rotation = "varimax")
+#Perform factor analysis
+Lambda <- FA$loadings
+#Estimate lambda
+Spec_Var <- FA$uniquenesses 
+Lambda
+Spec_Var
+```
+
+By convention `factanal` uses maximum likelihood estimation to find `Lambda`. We see that `R` returns the matrix along with some meta data about the columns of the matrix. Fortunately the specific variances can be obtained through `$uniquenesses`.
+
+Next we compute how good an estimate our $\Lambda$ and $\Phi$ are.
+```{r}
+Phi <- diag(FA$uniquenesses)
+#make Phi
+R <- Lambda%*%t(Lambda) + Phi
+#estimate the correlation matrix
+max(abs(cor(data) - R))
+#find the maximum difference between the estimated correlation matrix and the actual correlation matrix
+```
+
+This is not too bad, and in fact this error is decreasing in $k$, so a higher factor count would be more accurate, but remember we must embrace the tradeoff for interpretability. Below we compute the conversion matrix $A_k^{(FA)}$ and find our factors.
+
+```{r}
+Factor_Matrix <- solve(t(Lambda)%*%solve(Phi)%*%Lambda)%*%t(Lambda)%*%solve(Phi)
+factors <- as.matrix(data)%*%(t(Factor_Matrix))
+factors
+```
+
+Here we can see our data has reduced down to 6 dimensions, almost half of the original 11. 
+
+## Interpreting our Factors
+Since the loading matrix represents the correlation between the factors and the variables, we can find the factors which are highly correlated with different variables:
+```{r}
+# Get the loadings
+loadings <- FA$loadings
+loadings
+```
+We see that :
+- `Factor1` is highly negatively correlated with `cyl`,`disp` and `wt` and highly positively correlated with `mpg`, `drat`,`am` and `gear`.
+
+- `Factor2` is highly negatively correlated with `qsec` and `vs` and highly positively correlated with `hp` `cyl` and `disp`.
+
+- `Factor3` is highly highly positively correlated with `carb`  but is not particularly correlated with any other variable.
+
+- `Factor4` is slightly correlated with `disp` and `wt` but is not particularly correlated with any other variable.
+
+It is hard to discern what exactly these variables are,  by observing the `Cumulative Var` row in `loadings` we see as we go up the factors we have less explained variance, similar to PCA. With PCA we were abke to cluster them based on country of origin which gave us a very nice explaination of the principle components, however in this case we cannot do that.
+
+## Comparison aganist PCA
+For the purposes of comparison, we will also perform principle component analysis on `mtcars` and comare the results to factor analysis. Below we reperorm FA with $k=2$.
+```{r}
+FA <- factanal(mtcars, factors = 2, rotation = "varimax")
+#Perform factor analysis
+Lambda <- FA$loadings
+#Estimate lambda
+Phi <- diag(FA$uniquenesses) 
+Factor_Matrix <- solve(t(Lambda)%*%solve(Phi)%*%Lambda)%*%t(Lambda)%*%solve(Phi)
+factors <- as.matrix(data)%*%(t(Factor_Matrix))
+factors
+```
+
+Now we perform PCA on `mtcars`. We choose scaled for our purposes.
+```{r}
+library(mogavs)
+PCS <- prcomp(mtcars,center = TRUE,scale = TRUE)
+```
+
+Below we plot both the PCA and FA results together, as we can see there aren't a lot of similarities in this case, this may be because either the error caused by $k=2$ is too high, or that the factors and PCS are simply not related in this case.
+```{r}
+library(ggplot2)
+library(ggbiplot)
+library(cowplot)
+
+df <- as.data.frame(factors)
+names(df) <- c("Factor1", "Factor2")
+df$CarModel <- rownames(mtcars)
+
+FAPlot <- ggplot(df, aes(x = Factor1, y = Factor2)) +
+  geom_point() +
+  theme_minimal() +
+  geom_text(aes(label = CarModel), vjust = 1, hjust = 1,size = 2) +
+  labs(x = "Factor 1", y = "Factor 2")
+
+PCPlot <- ggbiplot(PCS,ellipse = TRUE,labels = rownames(mtcars),var.axes = FALSE)+
+theme(text = element_text(size = 0.5))
+plot_grid(PCPlot,FAPlot,labels = c("PCPlot","FAPlot"),ncol = 2)
+```
+It's hard to find similarities here, clearly the top half of the plots are vaguely similar, such as `Masaerati Bora` and `Ford Pantera` being skewed towards Factor 2 and PC2. But there are too many scramblings of data points to make any meaningful comparisons. There is also a cluster of points in the bottom right, but again there is a lot of variation around the whole plot.
+
+## Conclusion
+Considering that PCA provides so much more insight about the distrubution of the data, we would be inclined to use PCA over FA in this case. We had hoped that using `mtcars`, where we know that there is a nice clustering catagorisation of the data, would provide us a good example for factor analysis. Unfortunately we were wrong.
+
+
+# Independent Component Analysis on Music Dataset
+To perform ICA on the music dataset we make use of the library `fastICA`, we first load the `.wav` music files into our enviroment and use the `seewave` package to read the audio files an convert them into a dataframe to read.
+```{r}
+library(tuneR)
+library(seewave)
+library(fastICA)
+F1 <- readWave('ICA_mix_1.wav')
+F2 <- readWave('ICA_mix_2.wav')
+F3 <- readWave('ICA_mix_3.wav')
+```
+
+As we care about all of our audio files we `cbind` them into a single dataframe. We then scale the data to have a mean of 0 but keep the standard deviation unchanged. Thanks to the efficiency of the `fastICA` package we simply apply the function and specify how many components we think their are. Now in our case we know there are three. By convention the `fastICA` package uses $\phi(x) = \frac{1}{\alpha}\log \cosh(\alpha x)$ with $\alpha = 1$.
+```{r}
+Data <- cbind(F1@left,F2@left,F3@left)
+Data <- scale(Data,center = TRUE, scale = FALSE)
+ica <- fastICA(Data,n.comp = 3)
+Components <- ica$S
+
+
+#savewav(Components[,1],f = F1@samp.rate,filename = "signal1.wav")
+#savewav(Components[,2],f = F1@samp.rate,filename = "signal2.wav")
+#savewav(Components[,3],f = F1@samp.rate,filename = "signal3.wav")
+
+```
+
+We include our `savewav` commands for clarity but do not run them. It was a success and we managed to seperate our three original files.
+

@@ -1,0 +1,107 @@
+---
+title: "Statistical Methods 2 Porfolio 6: Generalised Additive Models"
+author: "Kieran Morris "
+output:
+  pdf_document: default
+  html_document: default
+
+---
+
+
+We will use the package `gss` to import the `wesdr` dataset. Let's see what the data looks like. 
+
+```{r}
+library(gss)
+
+data(wesdr)
+
+head(wesdr)
+```
+
+We have 3 observation variables:`dur`,`gly` and `bmi` and one response variable `ret`. We will use the `gam` function to fit a generalised additive model to the data.
+
+# Generating a Training and Test Set
+
+```{r}
+set.seed(123)
+train <- sample(1:nrow(wesdr), nrow(wesdr) * 0.75)
+wesdr_train <- wesdr[train,]
+wesdr_test <- wesdr[-train,]
+
+
+```
+
+
+# Fitting a Generalised Additive Model
+
+We utilise the `gam` function to fit a generalised additive model to the data, this gives us the smooth functions as well as their coefficients. This allows us to study the functions individually and their effect on the response variable.
+
+```{r}
+library(mgcv)
+
+gam_model <- gam(ret ~ s(dur,bs="cr") + s(gly,bs="cr") + s(bmi,bs="cr"), data = wesdr_train, family = binomial)
+
+```
+
+Fortunately `gam()` already performs cross validation so we have no need to do this manually. We utlise the package `gratia` which is designed to plot the estimated functions in GAMs.
+
+```{r}
+summary(gam_model)
+library(gratia)
+
+draw(gam_model)
+
+```
+
+We can see that `gly` is linear and fairly uniformly distributed, however both `dur` and `bmi` are non-linear and have very clear dense zones. We will compute the prediction error on the test set to see how well we fit, then reperform GAM but with `log(bmi)` and `log(dur)`.
+
+## Prediction Error (non-log)
+
+```{r}
+pred <- predict(gam_model, newdata = wesdr_test, type = "response")
+pred_error = sum((wesdr_test$ret - pred)^2)
+pred_error
+```
+
+## Prediction Error (log)
+
+```{r}
+wesdr_train$log_dur <- log(wesdr_train$dur)
+wesdr_train$log_bmi <- log(wesdr_train$bmi)
+wesdr_test$log_dur <- log(wesdr_test$dur)
+wesdr_test$log_bmi <- log(wesdr_test$bmi)
+
+gam_log_model <- gam(ret ~ s(log_dur,bs="cr") + s(gly,bs="cr") + s(log_bmi,bs="cr"), data = wesdr_train, family = binomial)
+
+pred_log <- predict(gam_log_model, newdata = wesdr_test, type = "response")
+pred_error_log = sum((wesdr_test$ret - pred_log)^2)
+pred_error_log
+```
+
+We get a slightly lower prediction error when we use the log of `dur` and `bmi`, but its almost no difference in the grand scheme of things. Let's see how these estimates perform against a generalised linear model from SM1.
+
+## Prediction Error (GLM)
+
+```{r}
+library(glmnet)
+
+glm_model <- glm(ret ~ dur + gly + bmi, data = wesdr_train, family = binomial)
+
+pred_glm <- predict(glm_model, newdata = wesdr_test, type = "response")
+pred_error_glm = sum((wesdr_test$ret - pred_glm)^2)
+pred_error_glm
+```
+
+Ah! So we in fact have slight improvement over a generalise linear model, again not by much. For fun lets try a GLM with the log of `dur` and `bmi`. No reason why we would prefer this.
+
+## Prediction Error (GLM log)
+
+```{r}
+glm_log_model <- glm(ret ~ log_dur + gly + log_bmi, data = wesdr_train, family = binomial)
+
+pred_glm_log <- predict(glm_log_model, newdata = wesdr_test, type = "response")
+pred_error_glm_log = sum((wesdr_test$ret - pred_glm_log)^2)
+pred_error_glm_log
+```
+
+Again a minor improvement, overall it goes GLM < GLM log < GAM < GAM log in terms of accuracy.

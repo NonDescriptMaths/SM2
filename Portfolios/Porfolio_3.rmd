@@ -1,0 +1,78 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+
+---
+
+# Kernel PCA
+Inspired by the dataset from the lecture notes, we add an inverted friend to the dataset, although the friend has its cluster types inverted. So our task it to classify the shell of one sphere and the core of another. Below we generate and plot the pure 3D data, it's a bit hard to make out as we don't have interactivity.
+
+```{r}
+library(scatterplot3d)
+library(ggplot2)
+library(gridExtra)
+
+# Define a function to generate points on a sphere
+sphereFun <- function(center = c(0,0,0), diameter = 1, npoints = 200){
+  tt <- runif(npoints, 0, 2*pi)
+  phi <- runif(npoints, 0, pi)
+  xx <- center[1] + diameter * sin(phi) * cos(tt)
+  yy <- center[2] + diameter * sin(phi) * sin(tt)
+  zz <- center[3] + diameter * cos(phi)
+  return(data.frame(x = xx, y = yy, z = zz))
+}
+
+# Generate points for four spheres with different centers and radii
+sphere1 <- sphereFun(center = c(-500,0,0), diameter = 200, npoints = 200)
+sphere2 <- sphereFun(center = c(-500,0,0), diameter = 500, npoints = 300)
+sphere3 <- sphereFun(center = c(500,0,0), diameter = 200, npoints = 200)
+sphere4 <- sphereFun(center = c(500,0,0), diameter = 500, npoints = 300)
+
+# Add some random noise to the points
+sphere1 <- sphere1 + rnorm(nrow(sphere1))
+sphere2 <- sphere2 + rnorm(nrow(sphere2))
+sphere3 <- sphere3 + rnorm(nrow(sphere3))
+sphere4 <- sphere4 + rnorm(nrow(sphere4))
+
+# Combine the datasets into one and add a cluster column
+data1 <- data.frame(sphere1, cluster = '0')
+data2 <- data.frame(sphere2, cluster = '1')
+data3 <- data.frame(sphere3, cluster = '1')
+data4 <- data.frame(sphere4, cluster = '0')
+
+data <- rbind(data1, data2, data3, data4)
+# Create a color vector based on the cluster column
+color_vector <- ifelse(data$cluster == '0', 'red', 'blue')
+
+# Plot the 3D data with the color vector
+scatterplot3d(data$x, data$y, data$z, color = color_vector, pch = 16,main = '3D Scatterplot')
+
+```
+
+Below we project the data into 2D, this is not with PCA, simply by taking pairs of dimensions and projecting.
+
+```{r}
+
+# Plot the data using ggplot2
+PLt_xy <- ggplot(data, aes(x = x, y = y, color = cluster)) +
+  geom_point() +
+  scale_color_manual(values = c('0' = '#ff4800', '1' = '#0084ff')) +
+  theme_minimal()
+
+Plt_xz <- ggplot(data, aes(x = x, y = z, color = cluster)) +
+  geom_point() +
+  scale_color_manual(values = c('0' = '#ff4800', '1' = '#0084ff')) +
+  theme_minimal()
+
+Plt_yz <- ggplot(data, aes(x = y, y = z, color = cluster)) +
+  geom_point() +
+  scale_color_manual(values = c('0' = '#ff4800', '1' = '#0084ff')) +
+  theme_minimal()
+
+grid.arrange(PLt_xy, Plt_xz, Plt_yz, ncol = 3)
+```
+
+```{r}
+
+```
