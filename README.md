@@ -6,4 +6,4 @@ Some highlights:
 - Cubic Spline approximation
 - Interfacing C++ with R
 - Building neural networks for tensorflow and pytorch
-- 
+- INterfacing C++ and Python via `pybind11`
